@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1579523360420.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "8D23DE23",
+    "lastKnownWriteTime" : 1579523161,
+    "last_content_update" : 1579523360420,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "7169755E",
+        "caption" : "fls",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=fls&cache_key=7169755E",
+        "displayedObservations" : 1821,
+        "environment" : "",
+        "expression" : "fls",
+        "object" : "fls",
+        "preview" : 0,
+        "totalObservations" : 1821,
+        "variables" : 16
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

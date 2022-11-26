@@ -1,0 +1,59 @@
+# Data 
+
+
+## Raw Data import 
+
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(metafor)
+library(ggthemes)
+library(cowplot)
+library(scales)
+library(knitr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(gsheet)
+library(janitor)
+
+
+fls <- gsheet2tbl("https://docs.google.com/spreadsheets/d/16bJjCAEVfjovk9ns77AEF04hU5Ykm2X0gH0kHAJ7XJo/edit?usp=sharing")
+
+
+```
+
+
+### Mean and SD 
+
+```{r, warning=FALSE}
+target <- c("Ativum", "CHECK", "FOX", "Elatus", "Fox Xpro", "Orkestra", "Priori Xtra", "Aproach Prima")
+rust <- rust %>% 
+  filter(brand_name %in% target) 
+  
+
+rust1 <- rust %>%   
+  group_by(study, year, location, state, region, climate, elev, brand_name, group, active_ingred) %>% 
+  summarise(sev_mean = mean(sev),
+            yld_mean = mean(yld),
+            sd_sev = sd(sev),
+            sd_yld = sd(yld))
+
+rust1
+
+rust1 %>% 
+  group_by(study)
+length(unique(rust1$study))
+
+rust1 %>% 
+tabyl(brand_name)
+
+```
+
+
+
+
+
+
+

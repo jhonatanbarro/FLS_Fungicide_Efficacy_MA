@@ -1,0 +1,498 @@
+% Code
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+# FLS Data
+
+
+```{r}
+library(tidyverse)
+library(metafor)
+library(janitor)
+library(here)
+library(cowplot)
+fls_sev <- read_csv("data/dat-sev.csv")
+fls_sev
+
+```
+
+
+## Active ingredients
+
+```{r}
+
+library(metafor)
+
+
+mv_sev_HCS <- rma.mv(log_sev, vi_sev,
+  mods = ~active_ingred,
+  random = list(~active_ingred | factor(study)),
+  struct = "HCS",
+  method = "ML",
+  data = fls_sev
+)
+
+
+mv_sev_HCS
+```
+
+
+
+
+### Percent control
+
+
+```{r}
+
+efficacy_sev <- data.frame(cbind(
+  (1 - exp(mv_sev_HCS$b)) * 100,
+  (1 - exp(mv_sev_HCS$ci.lb)) * 100,
+  (1 - exp(mv_sev_HCS$ci.ub)) * 100))
+
+efficacy_sev
+
+```
+
+```{r}
+
+efficacy_res = efficacy_sev %>% 
+  set_names("efficacy", "efficacy_up", "efficacy_lw") %>% 
+  mutate(fungicide = c("check", "AZOX + DIFE", "DIFE + PYDI", "PYRA", "PYRA + FLUX + PROP", "TFLX + PROT","TMET", "TMET + TEBU", "TTRA")) %>% 
+  filter(fungicide != "check")
+efficacy_res
+
+library(readr)
+write_csv(efficacy_res, "data/efficacy.csv")
+```
+
+
+### Contrasts
+
+We can set linear contrasts between treatments of interest and get the P-value using the `anova` function.
+
+
+```{r}
+anova(mv_sev_HCS, L = rbind(
+  c(0, 1, -1, 0, 0, 0, 0, 0, 0),
+  c(0, 1, 0, -1, 0, 0, 0, 0, 0),
+  c(0, 1, 0, 0, -1, 0, 0, 0, 0),
+  c(0, 1, 0, 0, 0, -1, 0, 0, 0),
+  c(0, 1, 0, 0, 0, 0, -1, 0, 0),
+  c(0, 1, 0, 0, 0, 0, 0, -1, 0),
+  c(0, 1, 0, 0, 0, 0, 0, 0, -1),
+  c(0, 0, 1, -1, 0, 0, 0, 0, 0),
+  c(0, 0, 1, 0, -1, 0, 0, 0, 0),
+  c(0, 0, 1, 0, 0, -1, 0, 0, 0),
+  c(0, 0, 1, 0, 0, 0, -1, 0, 0),
+  c(0, 0, 1, 0, 0, 0, 0, -1, 0),
+  c(0, 0, 1, 0, 0, 0, 0, 0, -1),
+  c(0, 0, 0, 1, -1, 0, 0, 0, 0),
+  c(0, 0, 0, 1, 0, -1, 0, 0, 0),
+  c(0, 0, 0, 1, 0, 0, -1, 0, 0),
+  c(0, 0, 0, 1, 0, 0, 0, -1, 0),
+  c(0, 0, 0, 1, 0, 0, 0, 0, -1),
+  c(0, 0, 0, 0, 1, -1, 0, 0, 0),
+  c(0, 0, 0, 0, 1, 0, -1, 0, 0),
+  c(0, 0, 0, 0, 1, 0, 0, -1, 0),
+  c(0, 0, 0, 0, 1, 0, 0, 0, -1),
+  c(0, 0, 0, 0, 0, 1, -1, 0, 0),
+  c(0, 0, 0, 0, 0, 1, 0, -1, 0),
+  c(0, 0, 0, 0, 0, 1, 0, 0, -1),
+  c(0, 0, 0, 0, 0, 0, 1, -1, 0),
+  c(0, 0, 0, 0, 0, 0, 1, 0, -1),
+  c(0, 0, 0, 0, 0, 0, 0, 1, -1)))
+```
+
+
+
+## Mod: YEAR
+
+```{r}
+library(metafor)
+summary(fls_sev$vi_sev)
+fls_sev1 <- fls_sev %>%
+  filter(mean_sev > 0) %>% 
+  filter(vi_sev > 0.001) %>% 
+  filter(year  %in% c(2015,2016,2017,2018,2019,2020)) %>% 
+  filter(active_ingred %in% c("AACHECK","AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "PYRA + FLUX + PROP"))
+  
+
+
+mv_sev_year <- rma.mv(log_sev, vi_sev,
+   mods = ~active_ingred*year,
+   random = list(~active_ingred | factor(study)),
+   struct = "HCS",
+   method = "ML",
+  #control = list(optimizer = "nlm"),
+   data = fls_sev1  %>% mutate(year= year - 2015))
+
+
+ mv_sev_year
+
+anova(mv_sev_year, btt = 9:14)
+```
+
+## Decline efficacy 
+
+```{r fig.height=8, fig.width=10}
+library(here)
+
+fls_effic <- fls_sev %>%
+ # filter(state  %in% c("Alabama", "Arkansas", "Kentucky", "Louisiana", "Iowa")) %>%
+  filter(year  %in% c(2015,2016,2017,2018,2019,2020)) %>%
+  filter(active_ingred %in% c("AACHECK","AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "PYRA + FLUX + PROP")) %>%
+  mutate(efficacy = (1-(mean_sev/sev_check))) %>%
+  mutate(efficacy1 = efficacy*100) %>%
+  filter(active_ingred!= "AACHECK")
+  
+
+
+reg1 = data.frame(mv_sev_year$beta, mv_sev_year$ci.lb, mv_sev_year$ci.ub) %>%
+  rownames_to_column("trat") %>%
+  separate(trat, into = c("lado1", "lado2"), sep = ":") %>%
+  separate(lado1, into = c("lixo", "lado3"),sep = "active_ingred") %>%
+  select(-lixo) %>%
+  filter(lado3 != "NA") %>%
+  set_names("fungicide", "mod", "mean", "ci.lb", "ci.ub") %>%
+  mutate(mod = c(rep("intercept", 6), rep("slope", 6))) %>%  
+  filter(fungicide %in% c("AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "PYRA + FLUX + PROP"))
+  # filter(fungicide %in% c("AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "FLUO + FLUT")) 
+
+  
+
+reg2 = reg1 %>%
+  group_by(fungicide) %>%
+  select(1:3) %>%
+  spread(mod, mean) %>% 
+  set_names("fungicide", "intercept_mean", "slope_mean")
+
+upper = reg1 %>%
+  group_by(fungicide) %>%
+  select(1:2,4) %>%
+  spread(mod, ci.lb) %>% 
+  set_names("fungicide", "intercept_upper", "slope_upper")
+
+lower = reg1 %>%
+  group_by(fungicide) %>%
+  select(1:2,5) %>%
+  spread(mod, ci.ub) %>% 
+  set_names("fungicide", "intercept_lower", "slope_lower")
+
+data_model = left_join(reg2, lower, by= c("fungicide")) %>% 
+  left_join(upper, by = c("fungicide"))
+
+
+year = seq(0,4, by = 0.1) 
+fungicide = NULL
+year_col = NULL
+for(i in 1:length(data_model$fungicide)){
+data_cache = fls_effic %>% 
+    filter(active_ingred == data_model$fungicide[i]) 
+years = unique(data_cache$year)-2015
+year = seq(first(years),last(years), by = 0.1)   
+  year_col = c(year_col,year) 
+  fungicide = c(fungicide, rep(data_model$fungicide[i], length(year)))
+}
+ 
+predicted = data.frame(year_col, fungicide) %>%
+  mutate(year = year_col) %>% 
+  right_join(data_model, by = "fungicide") %>% 
+  # filter(fungicide %in% c("AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "FLUO + FLUT")) %>%
+  #filter(fungicide %in% c("PYRA", "TMET", "TTRA")) %>% 
+  mutate(mean_efficacy = (1-exp(intercept_mean + slope_mean*year))*100,
+         CIL = (1-exp(intercept_lower + slope_lower*year))*100,
+         CIU = (1-exp(intercept_upper + slope_upper*year))*100,
+         year = year+2015) %>% 
+  mutate(active_ingred = fungicide) %>% 
+  dplyr::select(-fungicide)
+
+```
+
+```{r fig.height=10, fig.width=8}
+library(ggthemes)
+# fls_effic1 = fls_effic %>% 
+#   filter(active_ingred %in% c("PYRA", "TMET", "TTRA")) %>%
+#   mutate(active_ingred = case_when(
+#     active_ingred == "PYRA" ~ "Pyraclostrobin",
+#     active_ingred == "TTRA" ~ "Tetraconazole",
+#     active_ingred == "TMET" ~ "Thiophanate-methyl")) 
+
+  ggplot()+
+  geom_jitter(data = fls_effic, aes(year, efficacy1, size = vi_sev, color = state), alpha= 0.6, width = .15)+
+  geom_line(data = predicted, aes(year, mean_efficacy), size = 1, color = "steelblue")+
+  geom_line(data = predicted, aes(year, CIL), linetype="dashed", size = 1, alpha = 0.6)+
+  geom_line(data = predicted, aes(year, CIU), linetype="dashed", size = 1, alpha = 0.6)+
+  theme_minimal_grid()+
+  scale_color_calc()+
+  ylim(0,100)+
+  theme(legend.position = "right",
+        legend.title.align = 0.5,
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 12),
+        axis.text.x = element_text(size = 10, angle = 60, hjust = 1),
+        axis.text.y = element_text(size = 10),
+        axis.title.x = element_text(size=14, face = "bold"),
+        axis.title.y = element_text(size=14, face = "bold"),
+        strip.text = element_text(size = 12, face = "bold", color = "white"),
+        strip.background = element_rect(colour="black", fill="black"))+
+  labs(y = "Efficacy (%)", x = "Years", size = "Sampling Variance", color = "State")+
+  facet_wrap(~active_ingred, ncol = 2)
+ggsave("Figures/decline_efficacy.png", width = 8, height = 6,bg = "white", dpi = 600)
+```
+
+## Mod: yield_class
+
+```{r}
+#Moderator yield_class
+
+summary(fls_sev$yld_check) # Median = 3200; Mean = 3039 
+
+fls_sev <- fls_sev %>%
+  mutate(yld_check_class = case_when(
+      yld_check < 3200 ~ "low",
+      yld_check >= 3200 ~ "high"))
+table(fls_sev$active_ingred, fls_sev$yld_check_class)
+
+
+mv_yld_check <- rma.mv(log_sev, vi_sev,
+  mods = ~active_ingred * factor(yld_check_class),
+  random = list(~active_ingred | factor(study)),
+  struct = "HCS",
+  method = "ML",
+  #control = list(optimizer = "nlm"),
+  data = fls_sev
+)
+
+
+mv_yld_check
+
+
+anova(mv_yld_check, btt=11:18)
+
+
+```
+
+## Mod:Baseline
+
+```{r}
+library(tidyverse)
+
+summary(fls_sev$sev_check) 
+
+fls_sev <- fls_sev %>%
+  mutate(
+    sev_check_class = case_when(
+      sev_check < 14 ~ "Low",
+      sev_check >= 14 ~ "High"))
+
+mv_sev_bas <- rma.mv(log_sev, vi_sev,
+  mods = ~active_ingred * as.factor(sev_check_class),
+  random = list(~active_ingred | factor(study)),
+  struct = "HCS",
+  method = "ML",
+  data = fls_sev
+)
+
+
+mv_sev_bas
+
+anova(mv_sev_bas, btt = 11:18)
+```
+
+### Design groups
+
+```{r}
+fls_sev1 = fls_sev %>% 
+  group_by(study) %>% 
+  summarise(active_ingred1 = paste(active_ingred, collapse=';')) 
+
+fls_sev1 %>% 
+  tabyl(active_ingred1)
+```
+
+
+Sixteen different designs (here design refers to the set of treatments in the trial) were found in the trials reporting FLS severity.
+
+```{r}
+fls_sev <- fls_sev %>%
+  group_by(study) %>% 
+  mutate(n2 = n()) %>% 
+  filter(n2 != 1)
+
+design1 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "PYRA + FLUX + PROP", "DIFE + PYDI", "TMET + TEBU", "PYRA")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(1, length(active_ingred))) %>% 
+  filter(n2 == 5) %>% 
+  filter(n3 == 5)
+design1
+
+design2 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "PYRA + FLUX + PROP", "DIFE + PYDI", "TMET + TEBU", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(2, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design2
+
+design3 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TMET", "PYRA")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(3, length(active_ingred))) %>% 
+  filter(n2 == 3) %>% 
+  filter(n3 == 3)
+design3
+
+design4 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TMET", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(4, length(active_ingred))) %>% 
+  filter(n2 == 4) %>% 
+  filter(n3 == 4)
+design4
+
+design5 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE", "TFLX + PROT")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(5, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design5
+
+design6 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "DIFE + PYDI", "TMET", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(6, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design6
+
+design7 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "PYRA + FLUX + PROP", "DIFE + PYDI", "TMET", "PYRA")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(7, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design7
+
+design8 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "PYRA + FLUX + PROP", "DIFE + PYDI", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(8, length(active_ingred))) %>% 
+  filter(n2 == 8) %>% 
+  filter(n3 == 8)
+design8
+
+design9 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "PYRA + FLUX + PROP", "TMET + TEBU", "PYRA", "AZOX + DIFE", "TFLX + PROT")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(9, length(active_ingred))) %>% 
+  filter(n2 == 7) %>% 
+  filter(n3 == 7)
+design9
+
+design10 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "PYRA + FLUX + PROP", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(10, length(active_ingred))) %>% 
+  filter(n2 == 7) %>% 
+  filter(n3 == 7)
+design10
+
+design11 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "PYRA + FLUX + PROP", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE", "TFLX + PROT")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(11, length(active_ingred))) %>% 
+  filter(n2 == 8) %>% 
+  filter(n3 == 8)
+design11
+
+design12 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "TMET + TEBU", "PYRA")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(12, length(active_ingred))) %>% 
+  filter(n2 == 4) %>% 
+  filter(n3 == 4)
+design12
+
+design13 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "TMET", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(13, length(active_ingred))) %>% 
+  filter(n2 == 5) %>% 
+  filter(n3 == 5)
+design13
+
+design14 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "TMET", "TMET + TEBU", "AZOX + DIFE", "TFLX + PROT")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(14, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design14
+
+design15 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(15, length(active_ingred))) %>% 
+  filter(n2 == 6) %>% 
+  filter(n3 == 6)
+design15
+
+design16 = fls_sev %>% 
+  group_by(study) %>% 
+  filter(active_ingred  %in% c("AACHECK", "TTRA", "TMET", "TMET + TEBU", "PYRA", "AZOX + DIFE", "TFLX + PROT")) %>% 
+  mutate(n3 = n()) %>% 
+  mutate(design = rep(16, length(active_ingred))) %>% 
+  filter(n2 == 7) %>% 
+  filter(n3 == 7)
+design16
+
+sev_design = rbind(design1, design2, design3, design4, design5, design6, design7, design8, design9, design10, design11, design12, design13, design14, design15, design16)
+
+
+sev_design %>% 
+  group_by(study,design) %>% 
+  summarize() %>% 
+  tabyl(design)
+```
+
+### Inconsistency
+
+```{r}
+mv_sev_design <- rma.mv(log_sev, vi_sev,
+  mods = ~active_ingred * design,
+  random = list(~ 1 | study / design / active_ingred),
+  struct = "HCS",
+  method = "ML",
+  control = list(optimizer = "nlm"),
+  data = sev_design)
+
+mv_sev_design
+
+anova(mv_sev_design, btt = 11:18)
+
+```
+
+
+
+
+
+

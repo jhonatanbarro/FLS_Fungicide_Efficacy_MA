@@ -1,0 +1,307 @@
+# Data 
+
+
+## Raw Data import 
+
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(metafor)
+library(ggthemes)
+library(cowplot)
+library(scales)
+library(knitr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(gsheet)
+library(janitor)
+
+
+rust<- gsheet2tbl("https://docs.google.com/spreadsheets/d/1E-d5PexM5Z4piyVQqgfeqhbyASmhUx-l39yoOb7e-BY/edit?usp=sharing")
+
+
+```
+
+### Data from last five years (2014-2018)
+
+```{r}
+target <- c("2014", "2015", "2016", "2017", "2018")
+rust <- rust %>% 
+  filter(year %in% target)
+
+rust %>% 
+  group_by(study)
+length(unique(rust$study))
+```
+
+### Mean and SD 
+
+```{r, warning=FALSE}
+target <- c("Ativum", "CHECK", "FOX", "Elatus", "Fox Xpro", "Orkestra", "Priori Xtra", "Aproach Prima")
+rust <- rust %>% 
+  filter(brand_name %in% target) 
+  
+
+rust1 <- rust %>%   
+  group_by(study, year, location, state, region, climate, elev, brand_name, group, active_ingred) %>% 
+  summarise(sev_mean = mean(sev),
+            yld_mean = mean(yld),
+            sd_sev = sd(sev),
+            sd_yld = sd(yld))
+
+rust1
+
+rust1 %>% 
+  group_by(study)
+length(unique(rust1$study))
+
+rust1 %>% 
+tabyl(brand_name)
+
+```
+## Exploratory analysis
+
+By year
+
+```{r}
+library(janitor) 
+rust1 %>%
+  tabyl(year)
+```
+
+By location
+
+```{r}
+rust1 %>%
+  tabyl(location)
+ 
+```
+
+
+By state
+
+```{r}
+rust1 %>%
+  tabyl(state)
+```
+
+By Source
+
+```{r}
+rust1 %>%
+  tabyl(climate)
+```
+
+
+By active ingredient
+
+```{r}
+rust1 %>%
+  tabyl(brand_name)
+```
+
+## Preparing Data
+
+
+```{r, warning=FALSE}
+
+library(gsheet)
+rust <- gsheet2tbl(
+  "https://docs.google.com/spreadsheets/d/1E-d5PexM5Z4piyVQqgfeqhbyASmhUx-l39yoOb7e-BY/edit#gid=1064318214", sheetid = "2014-2018")
+
+
+## Add n_spray column - note that rust1 doesn't have n_spray column. Thus, we added that column here and then selected only 3 app.
+n_spray = rust %>% 
+  filter(fungicide != "CHECK") %>% 
+  group_by(study) %>% 
+  summarise(n_spray = mean(n_spray))
+
+rust2 = rust1 %>% 
+  full_join(n_spray) %>% 
+  mutate(n_spray = case_when(brand_name == "CHECK"~ 0, 
+                             brand_name != "CHECK"~ n_spray))
+
+
+rust2 %>%
+  tabyl(brand_name, n_spray)
+
+
+
+```
+
+### Selected Fungicides
+
+```{r, warning=FALSE}
+target <- c("CHECK", "Ativum", "FOX", "Fox Xpro", "Orkestra", "Elatus", "Priori Xtra", "Aproach Prima")
+## Only 3 aplications
+rust3 <- rust2 %>% 
+  filter(n_spray %in% c(0, 3)) %>% 
+  filter(brand_name %in% target) 
+
+
+rust3 %>%
+  tabyl(brand_name, year)
+
+# Renaming the treatments 
+library(plyr)
+rust3$brand_name <- revalue(rust3$brand_name, c("CHECK" = "AACHECK"))
+rust3$brand_name <- revalue(rust3$brand_name, c("FOX" = "TFLX + PROT"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Fox Xpro" = "BIXF + TFLX + PROT"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Priori Xtra" = "AZOX + CYPR"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Orkestra" = "PYRA + FLUX"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Ativum" = "PYRA + EPOX + FLUX"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Elatus" = "AZOX + BENZ"))
+rust3$brand_name <- revalue(rust3$brand_name, c("Aproach Prima" = "PICO + CYPR"))
+detach("package:plyr", unload = TRUE)
+
+
+
+```
+
+
+### sev_check and yld_check columns 
+
+```{r, warning=FALSE}
+# these two columns will be used as moderator variables later
+sbr_check = rust3 %>% 
+  ungroup() %>% 
+  filter(brand_name == "AACHECK")  %>% 
+  mutate(check = brand_name, sev_check = sev_mean, sd_check = sd_sev, yld_check = yld_mean, sd_yld_check = sd_yld ) %>% 
+  select(study, yld_check, sd_yld_check, sev_check,sd_check )
+
+sbr_fun = rust3 %>% 
+  filter(brand_name != "AACHECK")
+
+sbr_data = rust3 %>% 
+  full_join(sbr_check)
+
+
+sbr_data <- sbr_data %>% 
+  filter(state!= "TO") %>% 
+  filter(state!= "DF") %>% 
+  filter(state!= "BA") 
+
+sbr_data %>%
+  tabyl(location)
+length(unique(sbr_data$location))
+
+
+sbr_data %>% 
+  tabyl(state,region)
+
+sbr_data <- sbr_data %>% 
+  mutate(region_class = case_when(
+      state == "PR" ~ "S",
+      state == "RS" ~ "S",
+      state == "MT" ~ "CO",
+      state == "GO" ~ "CO",
+      state == "MS" ~ "SE",
+      state == "SP" ~ "SE",
+      state == "MG" ~ "SE"))
+
+sbr_data %>% 
+  tabyl(state,region_class)
+
+sbr_data %>% 
+  tabyl(brand_name)
+
+sbr_data %>% 
+  tabyl(state)
+
+
+length(unique(sbr_data$study))
+```
+
+## Create datasets
+
+
+### Severity Index 
+
+```{r}
+rust_sev <- sbr_data %>% 
+  filter(sev_mean != "NA") %>% 
+  filter(sev_mean>0)
+
+hist(rust_sev$sev_mean)
+
+
+# create the log of the sev variable
+rust_sev <- rust_sev %>%
+  mutate(log_sev = log(sev_mean))
+hist(rust_sev$log_sev)
+
+
+# create the sampling variance for the log of sev
+rust_sev$vi_sev <- with(rust_sev, (sd_sev^2) / (4 * sev_mean^2))
+ 
+rust_sev <- rust_sev %>%
+  group_by(study) %>% 
+  mutate(n2 = n()) %>% 
+  filter(n2 != 1)
+
+library(readr)
+write_csv(rust_sev, "dat-sev.csv")
+
+
+library(knitr)
+library(tidyverse)
+rust_sev <- read_csv("dat-sev.csv")
+
+rust_sev %>% 
+  group_by(study)
+length(unique(rust_sev$study))
+
+rust_sev %>% 
+tabyl(state)
+
+length(unique(rust_sev$study))
+
+```
+
+
+```{r}
+rust_sev %>%
+  tabyl(brand_name, year)
+
+rust_sev %>%
+  tabyl(brand_name)
+```
+
+
+### Yield
+
+```{r}
+rust_yld <- sbr_data %>% 
+  filter(yld_mean != "NA")
+
+
+rust_yld <- rust_yld %>%
+  group_by(study) %>% 
+  mutate(n2 = n()) %>% 
+  filter(n2 != 1)
+
+library(readr)
+write_csv(rust_yld, "dat-yld.csv")
+
+
+library(readr)
+library(tidyverse)
+rust_yld <- read_csv("dat-yld.csv")
+rust_yld %>% 
+  group_by(study)
+length(unique(rust_yld$study))
+
+```
+
+
+```{r}
+rust_yld %>%
+  tabyl(brand_name, year)
+
+rust_yld %>%
+  tabyl(brand_name)
+```
+
+

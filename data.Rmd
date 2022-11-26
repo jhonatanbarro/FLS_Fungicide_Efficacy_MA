@@ -1,0 +1,312 @@
+ 
+
+
+## Raw Data import 
+
+
+```{r}
+
+library(tidyverse)
+library(metafor)
+library(ggthemes)
+library(cowplot)
+library(scales)
+library(knitr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(gsheet)
+library(janitor)
+
+ 
+
+fls_raw <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1i6iM8wxkhmG9DH9voX9YJ_x4BdiGgjL5dkYVc293FZI/edit?usp=sharing") %>% 
+  group_by(study, brand_name) %>% 
+  mutate(n = n()) #columm with the number of rep
+
+# Tansforming soybean yield from bu/A to kg/ha
+fls_raw <- fls_raw %>% 
+  mutate(sev = as.numeric(sev),
+         yld = as.numeric(yld)) %>% 
+  mutate(yld = yld*67.25) 
+fls_raw
+fls_raw %>% 
+  tabyl(state,year)
+```
+
+
+## Summarrising data (mean and variance)
+
+```{r, warning=FALSE}
+
+fls1 <- fls_raw %>% 
+  filter(study != 23) %>% 
+  filter(study != 27) %>%
+  filter(study != 38) %>%
+  filter(study != 48) %>%
+  group_by(study, year, location, state, cultivar, planting_date, app_date, growth_stage, brand_name, group, active_ingred,n) %>% 
+  summarise(mean_sev = mean(sev),
+            mean_yld = mean(yld))
+
+
+fls2_sev <- fls_raw %>% 
+  filter(study != 23) %>% 
+  filter(study != 27) %>% 
+  filter(study != 38) %>%
+  filter(study != 48) %>%
+  filter(sev>0) %>% 
+  group_by(study, year) %>%  
+  select(active_ingred, rep, sev) %>%
+  group_by(study, year) %>% 
+  do(tidy(aov(.$sev ~ .$active_ingred + factor(.$rep)))) %>% 
+  filter(term == "Residuals") %>% 
+  select(1,2,6) %>% 
+  set_names("study", "year", "v_sev")
+
+
+
+fls2_yld <- fls_raw %>% 
+  filter(study != 23) %>% 
+  filter(study != 27) %>%
+  filter(study != 38) %>%
+  filter(study != 48) %>%
+  group_by(study, year) %>%  
+  select(active_ingred, rep, yld) %>% 
+  group_by(study, year) %>% 
+  do(tidy(aov(.$yld ~ .$active_ingred + factor(.$rep)))) %>% 
+  filter(term == "Residuals") %>% 
+  select(1,2,6) %>% 
+  set_names("study", "year", "v_yld")
+
+
+qmr = left_join(fls2_sev, fls2_yld)
+
+fls_trial = full_join(fls1, qmr)
+fls_trial
+```
+
+
+### Variance of studies 23, 27, 38 and 48 (Using means and CV)
+
+```{r}
+fls23 = fls_raw %>% 
+  filter(study == 23) %>% 
+  group_by(study, year, location, state) %>% 
+  summarise(mean_sev = mean(sev),
+            mean_yld = mean(yld)) %>% 
+  mutate(v_sev = ((21.48/100)*mean_sev)^2,
+         v_yld = ((5.95/100)*mean_yld)^2)
+fls23  
+  
+fls27 = fls_raw %>% 
+  filter(study == 27) %>% 
+  group_by(study, year, location, state) %>% 
+  summarise(mean_sev = mean(sev),
+            mean_yld = mean(yld)) %>% 
+  mutate(v_sev = ((21.01/100)*mean_sev)^2,
+         v_yld = ((8.94/100)*mean_yld)^2)
+fls27   
+
+fls38 = fls_raw %>% 
+  filter(study == 38) %>% 
+  group_by(study, year, location, state) %>% 
+  summarise(mean_sev = mean(sev),
+            mean_yld = mean(yld)) %>% 
+  mutate(v_sev = ((0/100)*mean_sev)^2,
+         v_yld = ((8.59/100)*mean_yld)^2)
+fls38 
+
+
+fls48 = fls_raw %>% 
+  filter(study == 48) %>% 
+  group_by(study, year, location, state) %>% 
+  summarise(mean_sev = mean(sev),
+            mean_yld = mean(yld)) %>% 
+  mutate(v_sev = ((0/100)*mean_sev)^2,
+         v_yld = ((11/100)*mean_yld)^2)
+fls48 
+  
+fls3 = rbind(fls23, fls27, fls38, fls48) %>% 
+  select(1:4,7:8)
+
+fls_cv = fls_raw %>% 
+  filter(study %in% c(23,27,38,48)) %>%
+  mutate(n = n*4) %>% 
+  full_join(fls3) %>% 
+  #select(-c(12,13,16)) %>% 
+  mutate(mean_sev = sev, mean_yld = yld) %>% 
+  select(-c(sev, yld))
+fls_cv  
+  
+```
+
+### All data
+
+```{r}
+
+fls = full_join(fls_trial, fls_cv)
+fls
+```
+
+
+### Check columns
+
+```{r}
+# these two columns will be used as moderator variables later
+fls_check = fls %>% 
+  ungroup() %>% 
+  filter(brand_name == "check")  %>% 
+  mutate(check = brand_name, sev_check = mean_sev, v_sev_check = v_sev, yld_check = mean_yld, v_yld_check = v_yld ) %>% 
+  select(study, yld_check, v_yld_check, sev_check, v_sev_check)
+
+fls_data = fls %>% 
+  full_join(fls_check)
+
+
+library(readr)
+write_csv(fls_data, "data/fls_data.csv")
+```
+
+
+## Exploratory analysis
+
+By year
+
+```{r}
+library(janitor) 
+fls_data %>%
+  tabyl(year)
+```
+
+
+By state
+
+```{r}
+fls_data %>%
+  tabyl(state)
+```
+
+By commercial product
+
+```{r}
+fls_data %>%
+  tabyl(brand_name)
+```
+
+
+By active ingredient
+
+```{r}
+fung = fls_data %>% 
+  tabyl(active_ingred) %>% 
+  filter(n>=25)
+fung
+```
+
+## Selected Fungicides
+
+```{r, warning=FALSE}
+
+
+fls_dat <- fls_data %>%
+  filter(active_ingred %in% c("check", "azoxystrobin+difenoconazole",  "pyraclostrobin", "difenoconazole+pydiflumetofen", "pyraclostrobin+fluxapyroxad+propiconazole","tetraconazol", "thiophanate-methyl", "thiophanate-methyl+tebuconazole", "trifloxystrobin+prothioconazole+prothioconazole"))
+
+
+fls_dat %>%
+  tabyl(active_ingred, year)
+
+
+# Renaming the treatments
+library(plyr)
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("check" = "AACHECK"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("azoxystrobin+difenoconazole" = "AZOX + DIFE"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("difenoconazole+pydiflumetofen" = "DIFE + PYDI"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("pyraclostrobin" = "PYRA"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("pyraclostrobin+fluxapyroxad+propiconazole" = "PYRA + FLUX + PROP"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("tetraconazol" = "TTRA"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("thiophanate-methyl" = "TMET"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("thiophanate-methyl+tebuconazole" = "TMET + TEBU"))
+fls_dat$active_ingred <- revalue(fls_dat$active_ingred, c("trifloxystrobin+prothioconazole+prothioconazole" = "TFLX + PROT"))
+detach("package:plyr", unload = TRUE)
+
+
+
+```
+
+## Create datasets
+
+
+### Severity Index 
+
+```{r}
+fls_sev <- fls_dat %>% 
+  filter(mean_sev != "NA") %>% 
+  filter(mean_sev>0)
+
+hist(fls_sev$mean_sev)
+summary(fls_sev$mean_sev)
+
+
+# create the log of the sev variable
+fls_sev <- fls_sev %>%
+  mutate(log_sev = log(mean_sev))
+hist(fls_sev$log_sev)
+
+
+# create the sampling variance for the log of sev
+fls_sev$vi_sev <- with(fls_sev, v_sev / (n * mean_sev^2))
+
+
+fls_sev = fls_sev %>% 
+  #select(1:15,18,20,22:23) %>% 
+  group_by(study, year, location, state, cultivar, planting_date, app_date, growth_stage, group, active_ingred,n, sev_check, yld_check) %>%
+  summarise(
+    mean_sev = mean(mean_sev),
+    mean_yld = mean(mean_yld),
+    log_sev = mean(log_sev),
+    vi_sev = mean(vi_sev),
+    V_sev = mean(v_sev))
+
+fls_sev %>% 
+  group_by(study)
+length(unique(fls_sev$study))
+
+
+library(readr)
+write_csv(fls_sev, "data/dat-sev.csv")
+
+
+```
+
+
+### Yield
+
+```{r}
+fls_yld <- fls_dat %>% 
+  filter(mean_yld != "NA")
+
+# Sampling variance for yield
+fls_yld$vi_yld <- with(fls_yld, v_yld/n) # multivariate approach
+
+hist(fls_yld$mean_yld)
+
+fls_yld = fls_yld %>% 
+  #select(1:14,18,20,21:22) %>% 
+  group_by(study, year, location, state, cultivar, planting_date, app_date, growth_stage, group, active_ingred,n, sev_check, yld_check) %>%
+  summarise(
+    mean_sev = mean(mean_sev),
+    mean_yld = mean(mean_yld),
+    vi_yld = mean(vi_yld))
+
+fls_yld %>% 
+  group_by(study)
+length(unique(fls_yld$study))
+
+library(readr)
+write_csv(fls_yld, "data/dat-yld.csv")
+
+
+```
+
+
+

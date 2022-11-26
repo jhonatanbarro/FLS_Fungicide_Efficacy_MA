@@ -1,0 +1,8 @@
+## About
+
+<img src = "Figures/fls_leaf.jpg" width=300 height = 400 align = right>
+This website provides easy access to commented R scripts that allows reproducing the analysis of the data from our publication.
+
+The present study presents critical information on the management of frogeye leaf spot (caused by *Cercospora sojina*) of soybean with fungicides in United States during ten growing seasons (2012 - 2021) across a range of environments in eight soybean-producing states (Alabama, Arkansas, Illinois, Iowa, Kentucky, Louisiana, Mississippi and Tennessee). We used a network meta-analytic approach to compare the performance of eight fungicides, including dual and triple premixes, and to check whether there was significant decline in fungicide efficacy and yield response over time. Additionally, We checked whether at least portion of the heterogeneity in treatment effects could be explained by baseline levels of disease. We further used the mean and uncertainty of the meta-analytic estimates in risk analysis for aiding decision making with regards the profitability of the registered fungicides under a range of scenarios.
+
+

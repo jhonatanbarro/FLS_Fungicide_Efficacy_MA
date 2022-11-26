@@ -1,0 +1,411 @@
+
+
+
+```{r setup, include=TRUE}
+
+library(tidyverse)
+library(metafor)
+library(ggthemes)
+library(cowplot)
+library(scales)
+library(knitr)
+library(broom)
+library(dplyr)
+library(readxl)
+library(gsheet)
+library(janitor)
+library(MetBrewer)
+
+fls_raw <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1i6iM8wxkhmG9DH9voX9YJ_x4BdiGgjL5dkYVc293FZI/edit?usp=sharing")
+
+# Tansforming soybean yield from bu/A to kg/ha
+fls_raw <- fls_raw %>% 
+  mutate(yld = yld*67.25)
+fls_raw
+fls_raw %>% 
+  tabyl(state, year)
+```
+
+## Histogramas
+
+```{r fig.height=8, fig.width=5, warning=FALSE}
+## Log of the Effect-sizes
+fls1 <- fls_raw %>%
+  mutate(
+    log_sev = log(sev),
+    log_yld = log(yld))
+
+
+hist_log_sev <- ggplot(fls1, aes(log_sev)) + 
+  geom_histogram(bin = 10, fill = "steelblue", color = "white") + 
+  theme_minimal_hgrid() + 
+  xlab("log(FLS severity)")
+
+
+hist_sev <- ggplot(fls1, aes(sev)) + 
+  geom_histogram(bin = 10, fill = "steelblue", color = "white") + 
+  theme_minimal_hgrid() +
+  xlab("FLS Severity (%)")
+
+
+
+hist_yld <- ggplot(fls1, aes(yld)) + 
+  geom_histogram(bin = 10,fill = "steelblue", color = "white") + 
+  theme_minimal_hgrid() +
+  xlab("Yield (Kg/ha)")
+
+
+library(cowplot)
+hist_plot <- plot_grid(hist_sev, hist_log_sev, hist_yld, labels = c("A", "B", "C"), nrow = 3, align = "V")
+hist_plot
+
+
+ggsave("Figures/histograms.png", width = 6, height = 9, dpi = 600, bg = "white")
+```
+
+
+## Boxplots
+
+
+### Severity
+
+```{r, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+fls_data <- read_csv("data/dat-sev.csv")
+fls_data <- fls_data %>% 
+ filter(active_ingred %in% c("AACHECK", "AZOX + DIFE", "PYRA", "TMET", "TMET + TEBU", "TTRA", "PYRA + FLUX + PROP", "TFLX + PROT", "DIFE + PYDI")) %>%  
+  filter(year != 2011)
+
+
+library(plyr)
+fls_data$active_ingred<- revalue(fls_data$active_ingred, c("AACHECK" = "CHECK"))
+detach("package:plyr", unload = TRUE)
+
+
+fls_data12 <- fls_data  
+fls_data12$active_ingred <- factor(fls_data12$active_ingred, levels = c("CHECK",  "PYRA", "PYRA + FLUX + PROP", "TTRA", "TMET", "AZOX + DIFE","TFLX + PROT","TMET + TEBU",  "DIFE + PYDI"))
+
+
+box_sev <- ggplot(fls_data12, aes(active_ingred, mean_sev)) +
+  geom_boxplot(size = 1, outlier.shape = NA, position=position_dodge(1), color = "black")+
+  geom_jitter(color = "grey30", width = 0.1, size = 2, alpha = 0.3)+
+  labs(x = "Fungicide", y = "FLS Severity (%)") +
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100), limits = c(0, 100)) +
+  theme_minimal_hgrid() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.x= element_blank(), 
+        axis.title.y= element_text(size=12, face = "bold"),
+        legend.position = "none")
+box_sev
+
+sev_year <- fls_data12 %>%
+  filter(active_ingred == "CHECK") %>%
+  ggplot(aes(factor(year), sev_check)) +
+  geom_boxplot(size = 1, outlier.shape = NA, position=position_dodge(1), color = "black")+
+  geom_jitter(width = 0.1, size = 2, color = "grey30", alpha = 0.3)+
+  labs(x = "Crop Seasons", y = "FLS Severity (%) in the CHECK") +
+  scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100), limits = c(0, 100))+
+  theme_minimal_hgrid() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size=12),
+        axis.title.x= element_blank(), 
+        axis.title.y= element_text(size=12, face = "bold"),
+        legend.position = "none")
+sev_year
+
+
+```
+
+
+### Yield
+
+```{r, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+fls_data <- read_csv("data/dat-yld.csv")
+fls_data <- fls_data %>% 
+  filter(active_ingred %in% c("AACHECK",  "PYRA", "PYRA + FLUX + PROP", "TTRA", "TMET", "AZOX + DIFE","TFLX + PROT","TMET + TEBU",  "DIFE + PYDI"))
+
+
+library(plyr)
+fls_data$active_ingred<- revalue(fls_data$active_ingred, c("AACHECK" = "CHECK"))
+detach("package:plyr", unload = TRUE)
+
+
+fls_data12 <- fls_data  
+fls_data12$active_ingred <- factor(fls_data12$active_ingred, levels = c("CHECK",  "PYRA", "TFLX + PROT", "TTRA", "TMET", "TMET + TEBU", "AZOX + DIFE", "PYRA + FLUX + PROP", "DIFE + PYDI"))
+
+
+box_yld <- ggplot(fls_data12, aes(active_ingred, mean_yld)) +
+  geom_boxplot(size = 1, outlier.shape = NA, position=position_dodge(1), color = "black")+
+  geom_jitter(color = "grey30", width = 0.1, size = 2, alpha = 0.3)+
+  labs(x = "Fungicide", y = "Yield (kg/ha)") +
+  theme_minimal_hgrid() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size=12),
+        axis.text.y = element_text(size=12),
+        axis.title=element_text(size=12, face = "bold"), 
+        legend.position = "none")
+box_yld
+
+yld_year <- fls_data12 %>%
+  filter(active_ingred == "CHECK") %>%
+  ggplot(aes(factor(year), yld_check)) +
+  geom_boxplot(size = 1, outlier.shape = NA, position=position_dodge(1), color = "black")+
+  geom_jitter(color = "grey30", width = 0.1, size = 2, alpha = 0.3)+
+  labs(x = "Crop Seasons", y = "Yield (kg/ha) in the CHECK") +
+  theme_minimal_hgrid() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size=12),
+        axis.text.y = element_text(size=12),
+        axis.title=element_text(size=12, face = "bold"), 
+        legend.position = "none")
+yld_year
+
+ 
+```
+
+```{r fig.height=10, fig.width=10, warning=FALSE}
+library(patchwork)
+
+ sev_year + box_sev + 
+yld_year + box_yld + 
+  plot_annotation(tag_levels = 'A') &
+  theme(panel.border = element_blank())
+
+
+ggsave("Figures/Combo_BOX_black.png", width = 10, height = 10, dpi = 600, bg = "white")
+```
+
+## Severity x Yield
+
+```{r fig.height=5, fig.width=7}
+library(cowplot)
+library(ggrepel)
+library(tidyverse)
+
+dat1 <- read_csv("data/sev_yld.csv")
+dat1
+dat1 %>% 
+  mutate(fungicide = factor(fungicide, levels = c("DIFE + PYDI", "TMET + TEBU", "AZOX + DIFE", "TFLX + PROT",  "TMET", "TTRA", "PYRA + FLUX + PROP", "PYRA"))) %>%
+  ggplot(aes(efficacy, yld)) +
+  geom_errorbar(aes(ymin = yld_lw, ymax = yld_upp, color = fungicide), width = 0, size = 0.7) +
+  geom_errorbarh(aes(xmin = efficacy_lw, xmax = efficacy_up, color = fungicide),  height = 0, size = 0.7)+
+  labs(x = "Efficacy (%)", y = "Yield response (kg/ha)", color = "Fungicide")+
+  scale_color_calc()+
+  geom_point(aes(efficacy, yld, color = fungicide)) +
+  scale_x_continuous(breaks = c(0,20,40,60,80), limits = c(0, 80))+
+  theme_minimal_grid()+
+    theme(axis.text=element_text(size=12), 
+        axis.title=element_text(size=14), 
+        legend.position = "right",
+        legend.title.align = 0.5,
+        legend.title = element_text(size=14, face = "bold"))
+
+ggsave("Figures/sev_yld.png", width = 7, height = 5, dpi = 600, bg = "white")
+```
+
+## Disease Pressure
+
+```{r fig.height=5, fig.width=8}
+library(cowplot)
+library(tidyverse)
+library(here)
+
+yld_bas = read_excel(here("data","yld_baseline.xlsx")) 
+
+yld_bas = yld_bas %>% 
+  mutate(sig = case_when(
+    fungicide == "AZOX + DIFE" ~ "sig",
+    fungicide == "DIFE + PYDI" ~ "sig",
+    fungicide == "PYRA + FLUX + PROP" ~ "sig",
+    fungicide == "TFLX + PROT" ~ "sig",
+    fungicide == "TMET" ~ "sig",
+    fungicide == "TMET + TEBU" ~ "sig",
+    fungicide == "TTRA" ~ "sig",
+    fungicide == "PYRA" ~ "ns",))
+
+
+yld_bas %>%
+  mutate(fungicide = factor(fungicide, levels = c("PYRA", "PYRA + FLUX + PROP", "TTRA", "TMET", "AZOX + DIFE","TFLX + PROT","TMET + TEBU",  "DIFE + PYDI"))) %>%
+  ggplot(aes(fungicide, mean)) +
+  geom_errorbar(aes(ymin = lower,ymax = upper, color = class, shape = sig), width = 0, size = 1,  position = position_dodge(0.3))+
+  labs(y = "Yield (kg/ha)", x = "Fungicide",  color = "Disease Pressure", shape = "")+
+  geom_point(aes(fungicide, mean, color = class),  position = position_dodge(0.3), size = 3.5) +
+  geom_point(aes(x =fungicide, y = 900,  shape = sig), size = 6, color = "red")+
+  theme_minimal_grid()+
+  theme(axis.text=element_text(size=10),
+        legend.justification = "center",
+        axis.title=element_text(size=10, face = "bold"),
+        legend.position = "top",
+        panel.border = element_rect(color = "gray60", size=1),
+        legend.title = element_text(size = 10, face = "bold"),
+        legend.text = element_text(size = 10, face = "italic"))+
+  scale_color_manual(values=c("#16317d", "#007e2f"),
+                     name = "Disease Pressure",
+                     breaks=c("High",  "Low"),
+                     labels=c("High", "Low"))+
+  scale_shape_manual(values = c(" ","*"),
+                    labels=c("",  "P \u2264 0.05"))+
+  coord_fixed()+
+  coord_flip()
+
+
+
+ggsave("Figures/baseline.png", height=5, width=7, dpi = 600, bg = "white")
+
+```
+
+## Tetris plot
+
+```{r fig.height=10, fig.width=13}
+
+fls_tetris <- gsheet2tbl("https://docs.google.com/spreadsheets/d/1i6iM8wxkhmG9DH9voX9YJ_x4BdiGgjL5dkYVc293FZI/edit#gid=1552905913", sheetid = "economic")
+fls_tetris <- fls_tetris %>%
+  mutate(
+    tau = as.numeric(tau),
+    D = as.numeric(D))
+
+
+prob <- function(C, P, tau, D) {
+  profit <- (D - (C / P)) / sqrt(tau) # loss
+  prob_gain <- pnorm(profit)
+  prob_gain
+}
+
+
+
+for (i in 1:length(fls_tetris$C)) {
+  fls_tetris$breacking_even[i] <- prob(C = fls_tetris$C[i], D = fls_tetris$D[i], tau = fls_tetris$tau[i], P = fls_tetris$P[i]) * 100
+}
+
+
+
+library(viridis)
+library(tidyverse)
+library(ggthemes)
+dat <- fls_tetris %>%
+  mutate(
+    breacking_even = as.numeric(breacking_even),
+    breacking_even = round(breacking_even, 1)
+  )
+
+summary(dat$breacking_even)
+dat %>%
+  mutate(breacking_even1 = case_when(
+    breacking_even >= 75 ~ "p \u2265 75  ",
+    breacking_even < 75 & breacking_even >= 65 ~ "65 \u2264 p < 75  ",
+    breacking_even < 65 & breacking_even >= 55 ~ "55 \u2264 p < 65  ",
+    breacking_even < 55 & breacking_even >= 45 ~ "45 \u2264 p < 55  ",
+    breacking_even < 45 ~ "0 \u2264 p < 45  ")) %>%
+  mutate(class = factor(class, levels = c("HIGH", "LOW"))) %>% 
+  mutate(fungicide = factor(fungicide, levels = c("PYRA", "TTRA", "DIFE + PYDI"))) %>% 
+  ggplot(aes(factor(C), factor(P), z = breacking_even1, fill = breacking_even1, label = breacking_even1)) +
+  geom_tile(color = "white", size = 0.5) +
+  scale_fill_manual(values=met.brewer("Austria", 4), name = "Probability (%)")+
+  scale_color_gradient(high = "white", low = "white") +
+  labs(x = "Fungicide + application cost (US$/ha)", y = "Soybean price (US$/kg) ", fill = "") +
+  theme_minimal() +
+ facet_grid(class ~ fungicide, scales = "free") +
+  theme(text = element_text(size = 20), 
+        legend.justification = "center", 
+        axis.text.x = element_text(size=20, angle = 45, hjust = 1), 
+        axis.text.y = element_text(size=20),
+        strip.text.x = element_text(size = 25, face = "bold"), 
+        strip.text.y = element_text(size = 25, face = "bold"), 
+        panel.grid.minor = element_line(colour = "white"), 
+        panel.grid.major = element_line(colour = "white"), 
+        legend.position = "bottom")
+
+ggsave("Figures/tetris.png", width = 13, height = 10, dpi = 600, bg = "white")
+```
+
+# MAP
+
+```{r}
+library(rnaturalearth)
+library(rnaturalearthhires)
+
+us_sf <- ne_states(country = "united states of america",
+                   returnclass = "sf")
+
+plot(us_sf)
+
+library(ggplot2)
+
+usa <- ggplot(us_sf) +
+  geom_sf(fill = "white")
+
+usa
+```
+
+
+
+```{r fig.height=9, fig.width=8}
+library(ggmap)
+library(ggspatial)
+library(tidyverse)
+fls_sev <- read_csv("data/dat-sev.csv") %>%
+  group_by(state) %>% 
+  summarise(sev1 = mean(sev_check)) %>% 
+  mutate(abrev = c("AL", "AR", "IL", "IA", "KY", "LA", "MS", "TN")) %>% 
+  set_names("name", "sev", "abrev")
+
+states <- filter(us_sf, 
+                 name_en == "Kentucky"|
+                 name_en == "Louisiana"|
+                 name_en == "Mississippi"|
+                 name_en == "Iowa"|
+                 name_en == "Alabama"|
+                 name_en == "Arkansas"|
+                 name_en == "Illinois"|
+                 name_en == "Tennessee")
+
+#states = data.frame(states)
+state2 = left_join(states, fls_sev, by = "name") 
+
+ggplot() +
+  geom_sf(data = us_sf, fill = "white") +
+  geom_sf(data = state2, aes(x = longitude, y = latitude, fill = sev)) +
+  geom_text(data = state2, aes(x = longitude, y = latitude, label = abrev), size = 3.5, hjust = 0.5, color = "white", fontface = "bold")+
+  labs(x = "Longitude", y = "Latitude", fill = "FLS Severity (%) \n in the CHECK") +
+  theme_bw()+
+  scale_fill_continuous(trans = 'reverse', guide = guide_colourbar(barwidth = 2, barheight = 10))+
+  annotation_scale(location = "bl", width_hint = 0.2) +
+  annotation_north_arrow(location = "tr", which_north = "true", pad_x = unit(0.10, "in"), pad_y = unit(0.1, "in"),
+        style = north_arrow_fancy_orienteering) +
+  coord_sf(xlim = c(-100, -80), ylim = c(23, 48), expand = FALSE)+
+  theme(legend.justification = "center", 
+        axis.text.x = element_text(size=12), 
+        axis.text.y = element_text(size=12),
+        axis.title = element_text(size=14),
+        legend.position = "right",
+        legend.title = element_text(size=16),
+        legend.text = element_text(size=14),
+        panel.background = element_rect(fill = "aliceblue"))
+ggsave("Figures/map.png", width = 9, height = 8, dpi = 600, bg = "white")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

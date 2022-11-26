@@ -1,0 +1,27 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1579523089318.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "1379D33",
+    "lastKnownWriteTime" : 1579523416,
+    "last_content_update" : 1579523416,
+    "path" : "C:/Users/Jhonatam/Google Drive/Frogeye leaf spot uniform fungicide trial data/Meta-analysis/FLS/data.Rmd",
+    "project_path" : "data.Rmd",
+    "properties" : {
+        "cursorPosition" : "3,14",
+        "last_setup_crc32" : "36D5ACFBfc6e2c1c",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
